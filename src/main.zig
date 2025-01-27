@@ -4,33 +4,37 @@ const stbImageWrite = @cImport({
 });
 
 const Vec3 = @import("vec3.zig");
+const Ray = @import("ray.zig");
 
-const Ray = struct {
-    origin: Vec3,
-    direction: Vec3,
+fn hitSphere(center: *const Vec3, radius: f64, r: *const Ray) bool {
+    const oc = center.sub(r.origin);
+    const a = r.direction.dot(r.direction);
+    const b = r.direction.dot(oc) * -2;
+    const c = oc.dot(oc) - radius * radius;
 
-    pub fn init(origin: Vec3, direction: Vec3) Ray {
-        return Ray{
-            .origin = origin,
-            .direction = direction,
-        };
+    const discriminant = b * b - 4 * a * c;
+
+    // 0 or > 0 means 1 solution (tangent) or 2 solutions (intersection)
+    return discriminant >= 0;
+}
+
+const sphereCenter = Vec3.init(0.0, 0.0, -1.0);
+const sphereRadius = 0.5;
+
+fn rayColor(r: Ray) Vec3 {
+    if (hitSphere(&sphereCenter, sphereRadius, &r)) {
+        return Vec3.init(1.0, 0.0, 0.0);
     }
 
-    pub fn at(self: Ray, t: f64) Vec3 {
-        return self.origin.add(self.direction.mul_scalar(t));
-    }
+    const unit_direction = r.direction.normalize();
+    // -1 < y < 1 since we scaled this to unit length, so we're now in the range of [0, 1]
+    const a = 0.5 * (unit_direction.y + 1.0);
 
-    pub fn color(self: Ray) Vec3 {
-        const unit_direction = self.direction.normalize();
-        // -1 < y < 1 since we scaled this to unit length, so we're now in the range of [0, 1]
-        const a = 0.5 * (unit_direction.y + 1.0);
-
-        // Linear interpolation
-        const white = Vec3.init(1.0, 1.0, 1.0).mulScalar(1.0 - a);
-        const blue = Vec3.init(0.5, 0.7, 1.0).mulScalar(a);
-        return white.add(blue);
-    }
-};
+    // Linear interpolation
+    const white = Vec3.init(1.0, 1.0, 1.0).mulScalar(1.0 - a);
+    const blue = Vec3.init(0.5, 0.7, 1.0).mulScalar(a);
+    return white.add(blue);
+}
 
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
@@ -67,7 +71,7 @@ pub fn main() !void {
         .sub(viewport_v.divScalar(2));
 
     const pixel00_loc = viewport_upper_left.add(
-        pixel_delta_u.add(pixel_delta_v).divScalar(2),
+        pixel_delta_u.add(pixel_delta_v).mulScalar(0.5),
     );
 
     // Writing
@@ -86,7 +90,7 @@ pub fn main() !void {
             const ray_direction = pixel_center.sub(camera_center);
             const ray = Ray.init(camera_center, ray_direction);
 
-            ray.color().write_pixel(data, (j * image_width + i) * comp);
+            rayColor(ray).writePixel(data, (j * image_width + i) * comp);
         }
     }
 

@@ -93,7 +93,7 @@ pub fn format(
     try writer.print("Vec3({d:.3}, {d:.3}, {d:.3})", .{ self.x, self.y, self.z });
 }
 
-pub fn write_pixel(self: Self, dest: []u8, offset: usize) void {
+pub fn writePixel(self: Self, dest: []u8, offset: usize) void {
     dest[offset + 0] = @intFromFloat(self.x * 255.999);
     dest[offset + 1] = @intFromFloat(self.y * 255.999);
     dest[offset + 2] = @intFromFloat(self.z * 255.999);

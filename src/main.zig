@@ -6,7 +6,7 @@ const stbImageWrite = @cImport({
 const Vec3 = @import("vec3.zig");
 const Ray = @import("ray.zig");
 
-fn hitSphere(center: *const Vec3, radius: f64, r: *const Ray) bool {
+fn hitSphere(center: *const Vec3, radius: f64, r: *const Ray) f64 {
     const oc = center.sub(r.origin);
     const a = r.direction.dot(r.direction);
     const b = r.direction.dot(oc) * -2;
@@ -15,15 +15,21 @@ fn hitSphere(center: *const Vec3, radius: f64, r: *const Ray) bool {
     const discriminant = b * b - 4 * a * c;
 
     // 0 or > 0 means 1 solution (tangent) or 2 solutions (intersection)
-    return discriminant >= 0;
+    if (discriminant < 0) {
+        return -1;
+    }
+
+    return (-b - @sqrt(discriminant)) / (2 * a);
 }
 
 const sphereCenter = Vec3.init(0.0, 0.0, -1.0);
 const sphereRadius = 0.5;
 
 fn rayColor(r: Ray) Vec3 {
-    if (hitSphere(&sphereCenter, sphereRadius, &r)) {
-        return Vec3.init(1.0, 0.0, 0.0);
+    const t = hitSphere(&sphereCenter, sphereRadius, &r);
+    if (t > 0) {
+        const n = r.at(t).sub(Vec3.init(0.0, 0.0, -1.0)).normalize();
+        return Vec3.init(n.x + 1.0, n.y + 1.0, n.z + 1.0).mulScalar(0.5);
     }
 
     const unit_direction = r.direction.normalize();

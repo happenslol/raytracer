@@ -8,18 +8,18 @@ const Ray = @import("ray.zig");
 
 fn hitSphere(center: *const Vec3, radius: f64, r: *const Ray) f64 {
     const oc = center.sub(r.origin);
-    const a = r.direction.dot(r.direction);
-    const b = r.direction.dot(oc) * -2;
-    const c = oc.dot(oc) - radius * radius;
+    const a = r.direction.lengthSquared();
+    const h = r.direction.dot(oc);
+    const c = oc.lengthSquared() - radius * radius;
 
-    const discriminant = b * b - 4 * a * c;
+    const discriminant = h * h - a * c;
 
     // 0 or > 0 means 1 solution (tangent) or 2 solutions (intersection)
     if (discriminant < 0) {
         return -1;
     }
 
-    return (-b - @sqrt(discriminant)) / (2 * a);
+    return (h - @sqrt(discriminant)) / a;
 }
 
 const sphereCenter = Vec3.init(0.0, 0.0, -1.0);

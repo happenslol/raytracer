@@ -3,6 +3,8 @@ const stbImageWrite = @cImport({
     @cInclude("stb_image_write.c");
 });
 
+const Interval = @import("interval.zig");
+
 const Vec3 = @import("vec3.zig");
 const Ray = @import("ray.zig");
 
@@ -31,16 +33,16 @@ const HitRecord = struct {
 
 const Hittable = struct {
     ptr: *const anyopaque,
-    hitFn: *const fn (ptr: *const anyopaque, r: *const Ray, ray_tmin: f64, ray_tmax: f64, hit_record: ?*HitRecord) bool,
+    hitFn: *const fn (ptr: *const anyopaque, r: *const Ray, ray_t: Interval, hit_record: ?*HitRecord) bool,
 
     fn init(ptr: anytype) Hittable {
         const T = @TypeOf(ptr);
         const ptr_info = @typeInfo(T);
 
         const gen = struct {
-            pub fn hit(self_ptr: *const anyopaque, r: *const Ray, ray_tmin: f64, ray_tmax: f64, hit_record: ?*HitRecord) bool {
+            pub fn hit(self_ptr: *const anyopaque, r: *const Ray, ray_t: Interval, hit_record: ?*HitRecord) bool {
                 const self: T = @ptrCast(@alignCast(self_ptr));
-                return @call(.always_inline, ptr_info.Pointer.child.hit, .{ self, r, ray_tmin, ray_tmax, hit_record });
+                return @call(.always_inline, ptr_info.Pointer.child.hit, .{ self, r, ray_t, hit_record });
             }
         };
 
@@ -50,8 +52,8 @@ const Hittable = struct {
         };
     }
 
-    pub inline fn hit(self: Hittable, r: *const Ray, ray_tmin: f64, ray_tmax: f64, hit_record: ?*HitRecord) bool {
-        return self.hitFn(self.ptr, r, ray_tmin, ray_tmax, hit_record);
+    pub inline fn hit(self: Hittable, r: *const Ray, ray_t: Interval, hit_record: ?*HitRecord) bool {
+        return self.hitFn(self.ptr, r, ray_t, hit_record);
     }
 };
 
@@ -63,7 +65,7 @@ const Sphere = struct {
         return .{ .center = center, .radius = @max(0, radius) };
     }
 
-    fn hit(self: *const Sphere, r: *const Ray, ray_tmin: f64, ray_tmax: f64, hit_record: ?*HitRecord) bool {
+    fn hit(self: *const Sphere, r: *const Ray, ray_t: Interval, hit_record: ?*HitRecord) bool {
         const oc = self.center.sub(r.origin);
         const a = r.direction.lengthSquared();
         const h = r.direction.dot(oc);
@@ -80,9 +82,9 @@ const Sphere = struct {
 
         // Find the nearest root that lies in the acceptable range.
         var root = (h - discriminantSqrt) / a;
-        if (root < ray_tmin or ray_tmax < root) {
+        if (!ray_t.surrounds(root)) {
             root = (h + discriminantSqrt) / a;
-            if (root <= ray_tmin or ray_tmax <= root)
+            if (!ray_t.surrounds(root))
                 return false;
         }
 
@@ -115,13 +117,13 @@ const HittableList = struct {
         self.objects.deinit();
     }
 
-    pub fn hit(self: *const HittableList, r: *const Ray, ray_tmin: f64, ray_tmax: f64, hit_record: ?*HitRecord) bool {
+    pub fn hit(self: *const HittableList, r: *const Ray, ray_t: Interval, hit_record: ?*HitRecord) bool {
         var temp_rec = HitRecord.init();
         var hit_anything = false;
-        var closest_so_far = ray_tmax;
+        var closest_so_far = ray_t.max;
 
         for (self.objects.items) |obj| {
-            if (obj.hit(r, ray_tmin, closest_so_far, &temp_rec)) {
+            if (obj.hit(r, Interval.init(ray_t.min, closest_so_far), &temp_rec)) {
                 hit_anything = true;
                 closest_so_far = temp_rec.t;
                 hit_record.?.* = temp_rec;
@@ -134,7 +136,7 @@ const HittableList = struct {
 
 fn rayColor(r: Ray, world: *HittableList) Vec3 {
     var rec = HitRecord.init();
-    if (world.hit(&r, 0, std.math.floatMax(f64), &rec)) {
+    if (world.hit(&r, Interval.init(0, std.math.inf(f64)), &rec)) {
         return rec.normal.add(Vec3.init(1.0, 1.0, 1.0)).mulScalar(0.5);
     }
 

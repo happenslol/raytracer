@@ -135,11 +135,22 @@ pub fn format(
 
 const intensity = Interval.init(0.0, 0.999);
 
+fn linearToGamma(linear_component: f64) f64 {
+    if (linear_component > 0)
+        return @sqrt(linear_component);
+
+    return 0;
+}
+
 pub fn writePixel(self: Self, dest: []u8, offset: usize) void {
+    const r = linearToGamma(self.x);
+    const g = linearToGamma(self.y);
+    const b = linearToGamma(self.z);
+
     // Translate the [0,1] component values to the byte range [0,255].
-    dest[offset + 0] = @intFromFloat(256.0 * intensity.clamp(self.x));
-    dest[offset + 1] = @intFromFloat(256.0 * intensity.clamp(self.y));
-    dest[offset + 2] = @intFromFloat(256.0 * intensity.clamp(self.z));
+    dest[offset + 0] = @intFromFloat(256.0 * intensity.clamp(r));
+    dest[offset + 1] = @intFromFloat(256.0 * intensity.clamp(g));
+    dest[offset + 2] = @intFromFloat(256.0 * intensity.clamp(b));
 }
 
 const test_allocator = std.testing.allocator;

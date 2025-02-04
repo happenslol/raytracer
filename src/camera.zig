@@ -122,7 +122,7 @@ fn rayColor(r: Ray, depth: u16, world: *const Hittable) Vec3 {
 
     var rec = Hittable.Record.init();
     if (world.hit(&r, Interval.init(0.001, std.math.inf(f64)), &rec)) {
-        const direction = Vec3.randomOnHemisphere(&rec.normal);
+        const direction = Vec3.randomOnHemisphere(&rec.normal).add(Vec3.randomUnitVector());
         return rayColor(Ray.init(rec.p, direction), depth - 1, world).mulScalar(0.5);
     }
 

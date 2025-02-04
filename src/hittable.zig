@@ -37,7 +37,7 @@ pub fn init(ptr: anytype) Self {
 
     const gen = struct {
         pub fn hit(self_ptr: *const anyopaque, r: *const Ray, ray_t: Interval, hit_record: ?*Record) bool {
-            const self: T = @ptrCast(@alignCast(self_ptr));
+            const self: T = @ptrCast(@alignCast(@constCast(self_ptr)));
             return @call(.always_inline, ptr_info.Pointer.child.hit, .{ self, r, ray_t, hit_record });
         }
     };

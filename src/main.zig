@@ -11,7 +11,7 @@ pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     const allocator = gpa.allocator();
 
-    const camera = Camera.init(16.0 / 9.0, 400);
+    const camera = Camera.init(16.0 / 9.0, 400, 100);
 
     var world = Hittable.List.init(allocator);
     defer world.deinit();

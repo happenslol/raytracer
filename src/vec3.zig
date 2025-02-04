@@ -1,4 +1,6 @@
 const std = @import("std");
+const Interval = @import("interval.zig");
+
 const Self = @This();
 
 x: f64,
@@ -93,10 +95,13 @@ pub fn format(
     try writer.print("Vec3({d:.3}, {d:.3}, {d:.3})", .{ self.x, self.y, self.z });
 }
 
+const intensity = Interval.init(0.0, 0.999);
+
 pub fn writePixel(self: Self, dest: []u8, offset: usize) void {
-    dest[offset + 0] = @intFromFloat(self.x * 255.999);
-    dest[offset + 1] = @intFromFloat(self.y * 255.999);
-    dest[offset + 2] = @intFromFloat(self.z * 255.999);
+    // Translate the [0,1] component values to the byte range [0,255].
+    dest[offset + 0] = @intFromFloat(256.0 * intensity.clamp(self.x));
+    dest[offset + 1] = @intFromFloat(256.0 * intensity.clamp(self.y));
+    dest[offset + 2] = @intFromFloat(256.0 * intensity.clamp(self.z));
 }
 
 const test_allocator = std.testing.allocator;

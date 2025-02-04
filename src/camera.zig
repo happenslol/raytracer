@@ -1,4 +1,5 @@
 const std = @import("std");
+const util = @import("util.zig");
 
 const stbImageWrite = @cImport({
     @cInclude("stb_image_write.c");
@@ -14,56 +15,16 @@ const Allocator = std.mem.Allocator;
 
 aspect_ratio: f64,
 image_width: u32,
+samples_per_pixel: u32,
 
 image_height: u32,
 center: Vec3,
 pixel00_loc: Vec3,
 pixel_delta_u: Vec3,
 pixel_delta_v: Vec3,
+pixel_samples_scale: f64,
 
-pub fn render(self: *const Self, alloc: Allocator, world: *const Hittable) !void {
-    const comp = 3;
-    const stride = self.image_width * comp;
-
-    const data = try alloc.alloc(u8, self.image_height * stride);
-    defer alloc.free(data);
-
-    for (0..self.image_height) |j| {
-        std.debug.print("\r\x1b[KScanlines remaining: {}", .{self.image_height - j});
-
-        for (0..self.image_width) |i| {
-            const pixel_center = self.pixel00_loc
-                .add(self.pixel_delta_u.mulScalar(@floatFromInt(i)))
-                .add(self.pixel_delta_v.mulScalar(@floatFromInt(j)));
-
-            const ray_direction = pixel_center.sub(self.center);
-            const ray = Ray.init(self.center, ray_direction);
-
-            rayColor(ray, world).writePixel(data, (j * self.image_width + i) * comp);
-        }
-    }
-
-    const result = stbImageWrite.stbi_write_png(
-        "./out.png",
-        @intCast(self.image_width),
-        @intCast(self.image_height),
-        comp,
-        @ptrCast(data),
-        @intCast(stride),
-    );
-
-    if (result == 0) {
-        std.debug.print("Failed to write out.png\n", .{});
-        return;
-    }
-
-    std.debug.print("\r\x1b[KDone!\n", .{});
-}
-
-pub fn init(
-    aspect_ratio: f64,
-    image_width: u32,
-) Self {
+pub fn init(aspect_ratio: f64, image_width: u32, samples_per_pixel: u32) Self {
     var image_height: u32 = @intFromFloat(@as(f64, @floatFromInt(image_width)) / aspect_ratio);
     if (image_height < 1) image_height = 1;
 
@@ -93,13 +54,55 @@ pub fn init(
     return .{
         .aspect_ratio = aspect_ratio,
         .image_width = image_width,
+        .samples_per_pixel = samples_per_pixel,
 
         .image_height = image_height,
         .center = center,
         .pixel00_loc = pixel00_loc,
         .pixel_delta_u = pixel_delta_u,
         .pixel_delta_v = pixel_delta_v,
+        .pixel_samples_scale = 1.0 / @as(f64, @floatFromInt(samples_per_pixel)),
     };
+}
+
+pub fn render(self: *const Self, alloc: Allocator, world: *const Hittable) !void {
+    const comp = 3;
+    const stride = self.image_width * comp;
+
+    const data = try alloc.alloc(u8, self.image_height * stride);
+    defer alloc.free(data);
+
+    for (0..self.image_height) |j| {
+        std.debug.print("\r\x1b[KScanlines remaining: {}", .{self.image_height - j});
+
+        for (0..self.image_width) |i| {
+            var pixel_color = Vec3.init(0, 0, 0);
+            for (0..self.samples_per_pixel) |_| {
+                const ray = self.getRay(@intCast(i), @intCast(j));
+                pixel_color = pixel_color.add(rayColor(ray, world));
+            }
+
+            pixel_color
+                .mulScalar(self.pixel_samples_scale)
+                .writePixel(data, (j * self.image_width + i) * comp);
+        }
+    }
+
+    const result = stbImageWrite.stbi_write_png(
+        "./out.png",
+        @intCast(self.image_width),
+        @intCast(self.image_height),
+        comp,
+        @ptrCast(data),
+        @intCast(stride),
+    );
+
+    if (result == 0) {
+        std.debug.print("Failed to write out.png\n", .{});
+        return;
+    }
+
+    std.debug.print("\r\x1b[KDone!\n", .{});
 }
 
 fn rayColor(r: Ray, world: *const Hittable) Vec3 {
@@ -116,4 +119,27 @@ fn rayColor(r: Ray, world: *const Hittable) Vec3 {
     const white = Vec3.init(1.0, 1.0, 1.0).mulScalar(1.0 - a);
     const blue = Vec3.init(0.5, 0.7, 1.0).mulScalar(a);
     return white.add(blue);
+}
+
+/// Constructs a camera ray originating from the origin and directed at randomly
+/// sampled point around the pixel location i, j.
+fn getRay(self: *const Self, i: u32, j: u32) Ray {
+    const offset = sampleSquare();
+    const pixel_sample = self.pixel00_loc
+        .add(self.pixel_delta_u.mulScalar(@as(f64, @floatFromInt(i)) + offset.x))
+        .add(self.pixel_delta_v.mulScalar(@as(f64, @floatFromInt(j)) + offset.y));
+
+    const ray_origin = self.center;
+    const ray_direction = pixel_sample.sub(ray_origin);
+
+    return Ray.init(ray_origin, ray_direction);
+}
+
+/// Returns the vector to a random point in the [-.5,-.5]-[+.5,+.5] unit square.
+fn sampleSquare() Vec3 {
+    return Vec3.init(
+        util.randomDouble() - 0.5,
+        util.randomDouble() - 0.5,
+        0,
+    );
 }

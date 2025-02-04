@@ -22,9 +22,9 @@ pub const Record = struct {
 
     /// Sets the hit record normal vector.
     // NOTE: the parameter `outward_normal` is assumed to have unit length.
-    pub fn setFaceNormal(self: *Record, r: *const Ray, outward_normal: Vec3) void {
+    pub fn setFaceNormal(self: *Record, r: *const Ray, outward_normal: *const Vec3) void {
         self.front_face = r.direction.dot(outward_normal) < 0;
-        self.normal = if (self.front_face) outward_normal else outward_normal.mulScalar(-1);
+        self.normal = if (self.front_face) outward_normal.copy() else outward_normal.copy().mulScalar(-1);
     }
 };
 

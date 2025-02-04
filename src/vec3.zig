@@ -1,4 +1,5 @@
 const std = @import("std");
+const util = @import("util.zig");
 const Interval = @import("interval.zig");
 
 const Self = @This();
@@ -13,6 +14,43 @@ pub fn init(x: f64, y: f64, z: f64) Self {
         .y = y,
         .z = z,
     };
+}
+
+pub fn copy(self: *const Self) Self {
+    return Self.init(self.x, self.y, self.z);
+}
+
+fn random() Self {
+    return Self.init(
+        util.randomDouble(),
+        util.randomDouble(),
+        util.randomDouble(),
+    );
+}
+
+fn randomInRange(min: f64, max: f64) Self {
+    return Self.init(
+        util.randomDoubleInRange(min, max),
+        util.randomDoubleInRange(min, max),
+        util.randomDoubleInRange(min, max),
+    );
+}
+
+pub inline fn randomUnitVector() Self {
+    while (true) {
+        const p = Self.randomInRange(-1.0, 1.0);
+        const len_sq = p.lengthSquared();
+
+        // Small values can underflow to zero, so we need to check for this
+        if (1e-160 < len_sq and len_sq <= 1.0)
+            // Normalize whil avoiding calculating length squared twice
+            return p.divScalar(std.math.sqrt(len_sq));
+    }
+}
+
+pub inline fn randomOnHemisphere(normal: *const Self) Self {
+    const p = Self.randomUnitVector();
+    return if (p.dot(normal) > 0.0) p else p.mulScalar(-1.0);
 }
 
 pub fn add(self: Self, other: Self) Self {
@@ -59,7 +97,7 @@ pub fn divScalar(self: Self, scalar: f64) Self {
     return self.mulScalar(1.0 / scalar);
 }
 
-pub fn normalize(self: Self) Self {
+pub inline fn normalize(self: Self) Self {
     return self.divScalar(self.length());
 }
 
@@ -71,7 +109,7 @@ pub fn cross(self: Self, other: Self) Self {
     );
 }
 
-pub fn dot(self: Self, other: Self) f64 {
+pub fn dot(self: Self, other: *const Self) f64 {
     return self.x * other.x + self.y * other.y + self.z * other.z;
 }
 

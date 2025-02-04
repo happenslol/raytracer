@@ -16,6 +16,7 @@ const Allocator = std.mem.Allocator;
 aspect_ratio: f64,
 image_width: u32,
 samples_per_pixel: u32,
+max_depth: u16,
 
 image_height: u32,
 center: Vec3,
@@ -24,7 +25,17 @@ pixel_delta_u: Vec3,
 pixel_delta_v: Vec3,
 pixel_samples_scale: f64,
 
-pub fn init(aspect_ratio: f64, image_width: u32, samples_per_pixel: u32) Self {
+pub fn init(opts: struct {
+    aspect_ratio: ?f64,
+    image_width: ?u32,
+    samples_per_pixel: ?u32,
+    max_depth: ?u16,
+}) Self {
+    const aspect_ratio = opts.aspect_ratio orelse 16.0 / 9.0;
+    const image_width = opts.image_width orelse 400;
+    const samples_per_pixel = opts.samples_per_pixel orelse 10;
+    const max_depth = opts.max_depth orelse 10;
+
     var image_height: u32 = @intFromFloat(@as(f64, @floatFromInt(image_width)) / aspect_ratio);
     if (image_height < 1) image_height = 1;
 
@@ -55,6 +66,7 @@ pub fn init(aspect_ratio: f64, image_width: u32, samples_per_pixel: u32) Self {
         .aspect_ratio = aspect_ratio,
         .image_width = image_width,
         .samples_per_pixel = samples_per_pixel,
+        .max_depth = max_depth,
 
         .image_height = image_height,
         .center = center,
@@ -79,7 +91,7 @@ pub fn render(self: *const Self, alloc: Allocator, world: *const Hittable) !void
             var pixel_color = Vec3.init(0, 0, 0);
             for (0..self.samples_per_pixel) |_| {
                 const ray = self.getRay(@intCast(i), @intCast(j));
-                pixel_color = pixel_color.add(rayColor(ray, world));
+                pixel_color = pixel_color.add(rayColor(ray, self.max_depth, world));
             }
 
             pixel_color
@@ -105,10 +117,13 @@ pub fn render(self: *const Self, alloc: Allocator, world: *const Hittable) !void
     std.debug.print("\r\x1b[KDone!\n", .{});
 }
 
-fn rayColor(r: Ray, world: *const Hittable) Vec3 {
+fn rayColor(r: Ray, depth: u16, world: *const Hittable) Vec3 {
+    if (depth <= 0) return Vec3.init(0, 0, 0);
+
     var rec = Hittable.Record.init();
-    if (world.hit(&r, Interval.init(0, std.math.inf(f64)), &rec)) {
-        return rec.normal.add(Vec3.init(1.0, 1.0, 1.0)).mulScalar(0.5);
+    if (world.hit(&r, Interval.init(0.001, std.math.inf(f64)), &rec)) {
+        const direction = Vec3.randomOnHemisphere(&rec.normal);
+        return rayColor(Ray.init(rec.p, direction), depth - 1, world).mulScalar(0.5);
     }
 
     const unit_direction = r.direction.normalize();

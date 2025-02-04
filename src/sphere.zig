@@ -15,7 +15,7 @@ pub fn init(center: Vec3, radius: f64) Self {
 pub fn hit(self: *const Self, r: *const Ray, ray_t: Interval, hit_record: ?*Hittable.Record) bool {
     const oc = self.center.sub(r.origin);
     const a = r.direction.lengthSquared();
-    const h = r.direction.dot(oc);
+    const h = r.direction.dot(&oc);
     const c = oc.lengthSquared() - self.radius * self.radius;
 
     // 0 or > 0 means 1 solution (tangent) or 2 solutions (intersection)
@@ -38,7 +38,7 @@ pub fn hit(self: *const Self, r: *const Ray, ray_t: Interval, hit_record: ?*Hitt
     if (hit_record) |rec| {
         rec.t = root;
         rec.p = r.at(root);
-        rec.setFaceNormal(r, rec.p.sub(self.center).divScalar(self.radius));
+        rec.setFaceNormal(r, &rec.p.sub(self.center).divScalar(self.radius));
     }
 
     return true;

@@ -1,13 +1,15 @@
 const std = @import("std");
 const Ray = @import("ray.zig");
 const Interval = @import("interval.zig");
-const Vec3 = @import("vec3.zig");
+const Vec3 = @import("Vec3.zig");
+const Material = @import("material.zig");
 
-const Self = @This();
+const Hittable = @This();
 
 pub const Record = struct {
     p: Vec3,
     normal: Vec3,
+    mat: ?*const Material,
     t: f64,
     front_face: bool,
 
@@ -15,6 +17,7 @@ pub const Record = struct {
         return .{
             .p = Vec3.init(0, 0, 0),
             .normal = Vec3.init(0, 0, 0),
+            .mat = null,
             .t = 0,
             .front_face = false,
         };
@@ -31,7 +34,7 @@ pub const Record = struct {
 ptr: *const anyopaque,
 hitFn: *const fn (ptr: *const anyopaque, r: *const Ray, ray_t: Interval, hit_record: ?*Record) bool,
 
-pub fn init(ptr: anytype) Self {
+pub fn init(ptr: anytype) Hittable {
     const T = @TypeOf(ptr);
     const ptr_info = @typeInfo(T);
 
@@ -48,18 +51,18 @@ pub fn init(ptr: anytype) Self {
     };
 }
 
-pub inline fn hit(self: Self, r: *const Ray, ray_t: Interval, hit_record: ?*Record) bool {
+pub inline fn hit(self: Hittable, r: *const Ray, ray_t: Interval, hit_record: ?*Record) bool {
     return self.hitFn(self.ptr, r, ray_t, hit_record);
 }
 
 pub const List = struct {
-    objects: std.ArrayList(Self),
+    objects: std.ArrayList(Hittable),
 
     pub fn init(allocator: std.mem.Allocator) List {
-        return .{ .objects = std.ArrayList(Self).init(allocator) };
+        return .{ .objects = std.ArrayList(Hittable).init(allocator) };
     }
 
-    pub fn add(self: *List, obj: Self) !void {
+    pub fn add(self: *List, obj: Hittable) !void {
         try self.objects.append(obj);
     }
 
@@ -85,5 +88,56 @@ pub const List = struct {
         }
 
         return hit_anything;
+    }
+};
+
+pub const Sphere = struct {
+    center: Vec3,
+    radius: f64,
+    mat: *const Material,
+
+    pub fn init(
+        center: Vec3,
+        radius: f64,
+        mat: *const Material,
+    ) Sphere {
+        return .{
+            .center = center,
+            .radius = @max(0, radius),
+            .mat = mat,
+        };
+    }
+
+    pub fn hit(self: *const Sphere, r: *const Ray, ray_t: Interval, hit_record: ?*Hittable.Record) bool {
+        const oc = self.center.sub(r.origin);
+        const a = r.direction.lengthSquared();
+        const h = r.direction.dot(&oc);
+        const c = oc.lengthSquared() - self.radius * self.radius;
+
+        // 0 or > 0 means 1 solution (tangent) or 2 solutions (intersection)
+        const discriminant = h * h - a * c;
+
+        if (discriminant < 0) {
+            return false;
+        }
+
+        const discriminantSqrt = @sqrt(discriminant);
+
+        // Find the nearest root that lies in the acceptable range.
+        var root = (h - discriminantSqrt) / a;
+        if (!ray_t.surrounds(root)) {
+            root = (h + discriminantSqrt) / a;
+            if (!ray_t.surrounds(root))
+                return false;
+        }
+
+        if (hit_record) |rec| {
+            rec.t = root;
+            rec.p = r.at(root);
+            rec.setFaceNormal(r, &rec.p.sub(self.center).divScalar(self.radius));
+            rec.mat = self.mat;
+        }
+
+        return true;
     }
 };

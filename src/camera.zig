@@ -5,7 +5,7 @@ const stbImageWrite = @cImport({
     @cInclude("stb_image_write.c");
 });
 
-const Vec3 = @import("vec3.zig");
+const Vec3 = @import("Vec3.zig");
 const Hittable = @import("hittable.zig");
 const Ray = @import("ray.zig");
 const Interval = @import("interval.zig");
@@ -122,8 +122,15 @@ fn rayColor(r: Ray, depth: u16, world: *const Hittable) Vec3 {
 
     var rec = Hittable.Record.init();
     if (world.hit(&r, Interval.init(0.001, std.math.inf(f64)), &rec)) {
-        const direction = Vec3.randomOnHemisphere(&rec.normal).add(Vec3.randomUnitVector());
-        return rayColor(Ray.init(rec.p, direction), depth - 1, world).mulScalar(0.5);
+        var scattered = Ray.init(Vec3.init(0, 0, 0), Vec3.init(0, 0, 0));
+        var attenuation = Vec3.init(0, 0, 0);
+
+        if (rec.mat) |mat| {
+            if (mat.scatter(&r, &rec, &attenuation, &scattered))
+                return attenuation.mul(rayColor(scattered, depth - 1, world));
+
+            return Vec3.init(0, 0, 0);
+        }
     }
 
     const unit_direction = r.direction.normalize();

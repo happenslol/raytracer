@@ -1,6 +1,6 @@
 const std = @import("std");
 const util = @import("util.zig");
-const Interval = @import("interval.zig");
+const Interval = util.Interval;
 
 const Vec3 = @This();
 

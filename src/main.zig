@@ -1,11 +1,9 @@
 const std = @import("std");
 
 const Vec3 = @import("Vec3.zig");
-const Ray = @import("ray.zig");
-const Interval = @import("interval.zig");
-const Hittable = @import("hittable.zig");
-const Camera = @import("camera.zig");
-const Material = @import("material.zig");
+const Hittable = @import("Hittable.zig");
+const Camera = @import("Camera.zig");
+const Material = @import("Material.zig");
 
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
@@ -19,17 +17,29 @@ pub fn main() !void {
     });
 
     var world = Hittable.List.init(allocator);
-    defer world.deinit();
+    defer world.deinit(allocator);
 
-    const material_ground = Material.init(&Material.Lambertian.init(Vec3.init(0.8, 0.8, 0.0)));
-    const material_center = Material.init(&Material.Lambertian.init(Vec3.init(0.1, 0.2, 0.5)));
-    const material_left = Material.init(&Material.Metal.init(Vec3.init(0.8, 0.8, 0.8), 0.3));
-    const material_right = Material.init(&Material.Metal.init(Vec3.init(0.8, 0.6, 0.2), 1.0));
+    const material_ground = try Material.Lambertian.init(allocator, Vec3.init(0.8, 0.8, 0.0));
+    defer material_ground.deinit(allocator);
 
-    try world.add(Hittable.init(&Hittable.Sphere.init(Vec3.init(0.0, -100.5, -1.0), 100.0, &material_ground)));
-    try world.add(Hittable.init(&Hittable.Sphere.init(Vec3.init(0.0, 0.0, -1.2), 0.5, &material_center)));
-    try world.add(Hittable.init(&Hittable.Sphere.init(Vec3.init(-1.0, 0.0, -1.0), 0.5, &material_left)));
-    try world.add(Hittable.init(&Hittable.Sphere.init(Vec3.init(1.0, 0.0, -1.0), 0.5, &material_right)));
+    const material_center = try Material.Lambertian.init(allocator, Vec3.init(0.1, 0.2, 0.5));
+    defer material_center.deinit(allocator);
+
+    const material_left = try Material.Metal.init(allocator, Vec3.init(0.8, 0.8, 0.8), 0.3);
+    defer material_left.deinit(allocator);
+
+    const material_right = try Material.Metal.init(allocator, Vec3.init(0.8, 0.6, 0.2), 1.0);
+    defer material_right.deinit(allocator);
+
+    const ground = try Hittable.Sphere.init(allocator, Vec3.init(0.0, -100.5, -1.0), 100.0, material_ground);
+    const center = try Hittable.Sphere.init(allocator, Vec3.init(0.0, 0.0, -1.2), 0.5, material_center);
+    const left = try Hittable.Sphere.init(allocator, Vec3.init(-1.0, 0.0, -1.0), 0.5, material_left);
+    const right = try Hittable.Sphere.init(allocator, Vec3.init(1.0, 0.0, -1.0), 0.5, material_right);
+
+    try world.add(ground);
+    try world.add(center);
+    try world.add(left);
+    try world.add(right);
 
     try camera.render(allocator, &Hittable.init(&world));
 }

@@ -1,15 +1,16 @@
 const std = @import("std");
-const Ray = @import("ray.zig");
-const Interval = @import("interval.zig");
+const util = @import("util.zig");
 const Vec3 = @import("Vec3.zig");
-const Material = @import("material.zig");
+const Material = @import("Material.zig");
+const Ray = @import("Camera.zig").Ray;
+const Interval = util.Interval;
 
 const Hittable = @This();
 
 pub const Record = struct {
     p: Vec3,
     normal: Vec3,
-    mat: ?*const Material,
+    mat: ?Material,
     t: f64,
     front_face: bool,
 
@@ -33,6 +34,7 @@ pub const Record = struct {
 
 ptr: *const anyopaque,
 hitFn: *const fn (ptr: *const anyopaque, r: *const Ray, ray_t: Interval, hit_record: ?*Record) bool,
+deinitFn: *const fn (ptr: *const anyopaque, alloc: std.mem.Allocator) void,
 
 pub fn init(ptr: anytype) Hittable {
     const T = @TypeOf(ptr);
@@ -43,16 +45,26 @@ pub fn init(ptr: anytype) Hittable {
             const self: T = @ptrCast(@alignCast(@constCast(self_ptr)));
             return @call(.always_inline, ptr_info.Pointer.child.hit, .{ self, r, ray_t, hit_record });
         }
+
+        pub fn deinit(self_ptr: *const anyopaque, alloc: std.mem.Allocator) void {
+            const self: T = @ptrCast(@alignCast(@constCast(self_ptr)));
+            return @call(.always_inline, ptr_info.Pointer.child.deinit, .{ self, alloc });
+        }
     };
 
     return .{
         .ptr = ptr,
         .hitFn = gen.hit,
+        .deinitFn = gen.deinit,
     };
 }
 
 pub inline fn hit(self: Hittable, r: *const Ray, ray_t: Interval, hit_record: ?*Record) bool {
     return self.hitFn(self.ptr, r, ray_t, hit_record);
+}
+
+pub fn deinit(self: Hittable, alloc: std.mem.Allocator) void {
+    return self.deinitFn(self.ptr, alloc);
 }
 
 pub const List = struct {
@@ -70,7 +82,11 @@ pub const List = struct {
         self.objects.clearRetainingCapacity();
     }
 
-    pub fn deinit(self: *List) void {
+    pub fn deinit(self: *List, alloc: std.mem.Allocator) void {
+        for (self.objects.items) |obj| {
+            obj.deinit(alloc);
+        }
+
         self.objects.deinit();
     }
 
@@ -94,18 +110,26 @@ pub const List = struct {
 pub const Sphere = struct {
     center: Vec3,
     radius: f64,
-    mat: *const Material,
+    mat: Material,
 
     pub fn init(
+        alloc: std.mem.Allocator,
         center: Vec3,
         radius: f64,
-        mat: *const Material,
-    ) Sphere {
-        return .{
+        mat: Material,
+    ) !Hittable {
+        const result = try alloc.create(Sphere);
+        result.* = .{
             .center = center,
             .radius = @max(0, radius),
             .mat = mat,
         };
+
+        return Hittable.init(result);
+    }
+
+    pub fn deinit(self: *const Sphere, alloc: std.mem.Allocator) void {
+        alloc.destroy(self);
     }
 
     pub fn hit(self: *const Sphere, r: *const Ray, ray_t: Interval, hit_record: ?*Hittable.Record) bool {

@@ -1,6 +1,7 @@
-const Ray = @import("ray.zig");
-const Hittable = @import("hittable.zig");
+const std = @import("std");
+const Hittable = @import("Hittable.zig");
 const Vec3 = @import("Vec3.zig");
+const Ray = @import("Camera.zig").Ray;
 
 const Material = @This();
 
@@ -12,6 +13,7 @@ scatterFn: *const fn (
     attenuation: *Vec3,
     scattered: *Ray,
 ) bool,
+deinitFn: *const fn (ptr: *const anyopaque, alloc: std.mem.Allocator) void,
 
 pub fn init(ptr: anytype) Material {
     const T = @TypeOf(ptr);
@@ -26,19 +28,19 @@ pub fn init(ptr: anytype) Material {
             scattered: *Ray,
         ) bool {
             const self: T = @ptrCast(@alignCast(@constCast(self_ptr)));
-            return @call(.always_inline, ptr_info.Pointer.child.scatter, .{
-                self,
-                r_in,
-                hit_record,
-                attenuation,
-                scattered,
-            });
+            return @call(.always_inline, ptr_info.Pointer.child.scatter, .{ self, r_in, hit_record, attenuation, scattered });
+        }
+
+        pub fn deinit(self_ptr: *const anyopaque, alloc: std.mem.Allocator) void {
+            const self: T = @ptrCast(@alignCast(@constCast(self_ptr)));
+            return @call(.always_inline, ptr_info.Pointer.child.deinit, .{ self, alloc });
         }
     };
 
     return .{
         .ptr = ptr,
         .scatterFn = gen.scatter,
+        .deinitFn = gen.deinit,
     };
 }
 
@@ -52,11 +54,21 @@ pub inline fn scatter(
     return self.scatterFn(self.ptr, r_in, hit_record, attenuation, scattered);
 }
 
+pub inline fn deinit(self: Material, alloc: std.mem.Allocator) void {
+    self.deinitFn(self.ptr, alloc);
+}
+
 pub const Lambertian = struct {
     albedo: Vec3,
 
-    pub fn init(albedo: Vec3) Lambertian {
-        return .{ .albedo = albedo };
+    pub fn init(alloc: std.mem.Allocator, albedo: Vec3) !Material {
+        const result = try alloc.create(Lambertian);
+        result.* = .{ .albedo = albedo };
+        return Material.init(result);
+    }
+
+    pub fn deinit(self: *const Lambertian, alloc: std.mem.Allocator) void {
+        alloc.destroy(self);
     }
 
     pub fn scatter(
@@ -81,8 +93,14 @@ pub const Metal = struct {
     albedo: Vec3,
     fuzz: f64,
 
-    pub fn init(albedo: Vec3, fuzz: f64) Metal {
-        return .{ .albedo = albedo, .fuzz = fuzz };
+    pub fn init(alloc: std.mem.Allocator, albedo: Vec3, fuzz: f64) !Material {
+        const result = try alloc.create(Metal);
+        result.* = .{ .albedo = albedo, .fuzz = fuzz };
+        return Material.init(result);
+    }
+
+    pub fn deinit(self: *const Metal, alloc: std.mem.Allocator) void {
+        alloc.destroy(self);
     }
 
     pub fn scatter(

@@ -6,12 +6,27 @@ const stbImageWrite = @cImport({
 });
 
 const Vec3 = @import("Vec3.zig");
-const Hittable = @import("hittable.zig");
-const Ray = @import("ray.zig");
-const Interval = @import("interval.zig");
+const Hittable = @import("Hittable.zig");
+const Interval = util.Interval;
 
-const Self = @This();
+const Camera = @This();
 const Allocator = std.mem.Allocator;
+
+pub const Ray = struct {
+    origin: Vec3,
+    direction: Vec3,
+
+    pub fn init(origin: Vec3, direction: Vec3) Ray {
+        return Ray{
+            .origin = origin,
+            .direction = direction,
+        };
+    }
+
+    pub fn at(self: Ray, t: f64) Vec3 {
+        return self.origin.add(self.direction.mulScalar(t));
+    }
+};
 
 aspect_ratio: f64,
 image_width: u32,
@@ -30,7 +45,7 @@ pub fn init(opts: struct {
     image_width: ?u32,
     samples_per_pixel: ?u32,
     max_depth: ?u16,
-}) Self {
+}) Camera {
     const aspect_ratio = opts.aspect_ratio orelse 16.0 / 9.0;
     const image_width = opts.image_width orelse 400;
     const samples_per_pixel = opts.samples_per_pixel orelse 10;
@@ -77,7 +92,7 @@ pub fn init(opts: struct {
     };
 }
 
-pub fn render(self: *const Self, alloc: Allocator, world: *const Hittable) !void {
+pub fn render(self: *const Camera, alloc: Allocator, world: *const Hittable) !void {
     const comp = 3;
     const stride = self.image_width * comp;
 
@@ -145,7 +160,7 @@ fn rayColor(r: Ray, depth: u16, world: *const Hittable) Vec3 {
 
 /// Constructs a camera ray originating from the origin and directed at randomly
 /// sampled point around the pixel location i, j.
-fn getRay(self: *const Self, i: u32, j: u32) Ray {
+fn getRay(self: *const Camera, i: u32, j: u32) Ray {
     const offset = sampleSquare();
     const pixel_sample = self.pixel00_loc
         .add(self.pixel_delta_u.mulScalar(@as(f64, @floatFromInt(i)) + offset.x))

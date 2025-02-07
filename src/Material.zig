@@ -1,4 +1,5 @@
 const std = @import("std");
+const util = @import("util.zig");
 const Hittable = @import("Hittable.zig");
 const Vec3 = @import("Vec3.zig");
 const Ray = @import("Camera.zig").Ray;
@@ -119,5 +120,50 @@ pub const Metal = struct {
         attenuation.* = self.albedo;
 
         return scattered.direction.dot(&hit_record.normal) > 0;
+    }
+};
+
+pub const Dielectric = struct {
+    refraction_index: f64,
+
+    pub fn init(alloc: std.mem.Allocator, refraction_index: f64) !Material {
+        const result = try alloc.create(Dielectric);
+        result.* = .{ .refraction_index = refraction_index };
+        return Material.init(result);
+    }
+
+    pub fn deinit(self: *const Dielectric, alloc: std.mem.Allocator) void {
+        alloc.destroy(self);
+    }
+
+    pub fn scatter(
+        self: *const Dielectric,
+        r_in: *const Ray,
+        hit_record: *const Hittable.Record,
+        attenuation: *Vec3,
+        scattered: *Ray,
+    ) bool {
+        attenuation.* = Vec3.init(1, 1, 1);
+        const ri = if (hit_record.front_face) (1.0 / self.refraction_index) else self.refraction_index;
+
+        const unit_direction = r_in.direction.normalize();
+        const cos_theta = @min(unit_direction.mulScalar(-1.0).dot(&hit_record.normal), 1.0);
+        const sin_theta = @sqrt(1.0 - cos_theta * cos_theta);
+
+        const cannot_refract = ri * sin_theta > 1.0;
+        const direction = if (cannot_refract or reflectance(cos_theta, ri) > util.randomDouble())
+            unit_direction.reflect(&hit_record.normal)
+        else
+            unit_direction.refract(&hit_record.normal, ri);
+
+        scattered.* = Ray.init(hit_record.p, direction);
+
+        return true;
+    }
+
+    fn reflectance(cosine: f64, refraction_index: f64) f64 {
+        var r0 = (1.0 - refraction_index) / (1.0 + refraction_index);
+        r0 = r0 * r0;
+        return r0 + (1.0 - r0) * std.math.pow(f64, 1 - cosine, 5.0);
     }
 };

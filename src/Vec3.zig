@@ -20,7 +20,7 @@ pub fn copy(self: *const Vec3) Vec3 {
     return Vec3.init(self.x, self.y, self.z);
 }
 
-fn random() Vec3 {
+pub inline fn random() Vec3 {
     return Vec3.init(
         util.randomDouble(),
         util.randomDouble(),
@@ -28,7 +28,7 @@ fn random() Vec3 {
     );
 }
 
-fn randomInRange(min: f64, max: f64) Vec3 {
+pub inline fn randomInRange(min: f64, max: f64) Vec3 {
     return Vec3.init(
         util.randomDoubleInRange(min, max),
         util.randomDoubleInRange(min, max),
@@ -53,6 +53,13 @@ pub inline fn randomOnHemisphere(normal: *const Vec3) Vec3 {
     return if (p.dot(normal) > 0.0) p else p.mulScalar(-1.0);
 }
 
+pub inline fn randomInUnitDisk() Vec3 {
+    while (true) {
+        const p = Vec3.init(util.randomDoubleInRange(-1, 1), util.randomDoubleInRange(-1, 1), 0);
+        if (p.lengthSquared() < 1) return p;
+    }
+}
+
 pub fn add(self: Vec3, other: Vec3) Vec3 {
     return Vec3.init(
         self.x + other.x,
@@ -67,10 +74,6 @@ pub fn sub(self: Vec3, other: Vec3) Vec3 {
         self.y - other.y,
         self.z - other.z,
     );
-}
-
-pub fn subScalar(self: Vec3, other: f64) Vec3 {
-    return Vec3.init(self.x - other, self.y - other, self.z - other);
 }
 
 pub fn mul(self: Vec3, other: Vec3) Vec3 {
@@ -132,6 +135,13 @@ pub fn nearZero(self: Vec3) bool {
 
 pub inline fn reflect(self: Vec3, normal: *const Vec3) Vec3 {
     return self.sub(normal.*.mulScalar(2.0 * self.dot(normal)));
+}
+
+pub inline fn refract(self: Vec3, normal: *const Vec3, etai_over_etat: f64) Vec3 {
+    const cos_theta = @min(self.mulScalar(-1.0).dot(normal), 1.0);
+    const r_out_perp = self.add(normal.mulScalar(cos_theta)).mulScalar(etai_over_etat);
+    const r_out_parallel = normal.mulScalar(@sqrt(@abs(1.0 - r_out_perp.lengthSquared())) * -1.0);
+    return r_out_perp.add(r_out_parallel);
 }
 
 pub fn format(

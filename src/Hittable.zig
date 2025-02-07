@@ -1,6 +1,6 @@
 const std = @import("std");
 const util = @import("util.zig");
-const Vec3 = @import("Vec3.zig");
+const vec3 = @import("vec3.zig");
 const Material = @import("Material.zig");
 const Ray = @import("Camera.zig").Ray;
 const Interval = util.Interval;
@@ -8,16 +8,16 @@ const Interval = util.Interval;
 const Hittable = @This();
 
 pub const Record = struct {
-    p: Vec3,
-    normal: Vec3,
+    p: vec3.vec3,
+    normal: vec3.vec3,
     mat: ?Material,
     t: f64,
     front_face: bool,
 
     pub fn init() Record {
         return .{
-            .p = Vec3.init(0, 0, 0),
-            .normal = Vec3.init(0, 0, 0),
+            .p = vec3.init(0, 0, 0),
+            .normal = vec3.init(0, 0, 0),
             .mat = null,
             .t = 0,
             .front_face = false,
@@ -26,9 +26,9 @@ pub const Record = struct {
 
     /// Sets the hit record normal vector.
     // NOTE: the parameter `outward_normal` is assumed to have unit length.
-    pub fn setFaceNormal(self: *Record, r: *const Ray, outward_normal: *const Vec3) void {
-        self.front_face = r.direction.dot(outward_normal) < 0;
-        self.normal = if (self.front_face) outward_normal.copy() else outward_normal.copy().mulScalar(-1);
+    pub fn setFaceNormal(self: *Record, r: *const Ray, outward_normal: vec3.vec3) void {
+        self.front_face = vec3.dot(r.direction, outward_normal) < 0;
+        self.normal = if (self.front_face) outward_normal else outward_normal * vec3.scalar(-1);
     }
 };
 
@@ -108,13 +108,13 @@ pub const List = struct {
 };
 
 pub const Sphere = struct {
-    center: Vec3,
+    center: vec3.vec3,
     radius: f64,
     mat: Material,
 
     pub fn init(
         alloc: std.mem.Allocator,
-        center: Vec3,
+        center: vec3.vec3,
         radius: f64,
         mat: Material,
     ) !Hittable {
@@ -133,10 +133,10 @@ pub const Sphere = struct {
     }
 
     pub fn hit(self: *const Sphere, r: *const Ray, ray_t: Interval, hit_record: ?*Hittable.Record) bool {
-        const oc = self.center.sub(r.origin);
-        const a = r.direction.lengthSquared();
-        const h = r.direction.dot(&oc);
-        const c = oc.lengthSquared() - self.radius * self.radius;
+        const oc = self.center - r.origin;
+        const a = vec3.lengthSquared(r.direction);
+        const h = vec3.dot(r.direction, oc);
+        const c = vec3.lengthSquared(oc) - self.radius * self.radius;
 
         // 0 or > 0 means 1 solution (tangent) or 2 solutions (intersection)
         const discriminant = h * h - a * c;
@@ -158,7 +158,7 @@ pub const Sphere = struct {
         if (hit_record) |rec| {
             rec.t = root;
             rec.p = r.at(root);
-            rec.setFaceNormal(r, &rec.p.sub(self.center).divScalar(self.radius));
+            rec.setFaceNormal(r, (rec.p - self.center) / vec3.scalar(self.radius));
             rec.mat = self.mat;
         }
 

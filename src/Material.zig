@@ -1,7 +1,7 @@
 const std = @import("std");
 const util = @import("util.zig");
 const Hittable = @import("Hittable.zig");
-const Vec3 = @import("Vec3.zig");
+const vec3 = @import("vec3.zig");
 const Ray = @import("Camera.zig").Ray;
 
 const Material = @This();
@@ -11,7 +11,7 @@ scatterFn: *const fn (
     ptr: *const anyopaque,
     r_in: *const Ray,
     hit_record: *const Hittable.Record,
-    attenuation: *Vec3,
+    attenuation: *vec3.vec3,
     scattered: *Ray,
 ) bool,
 deinitFn: *const fn (ptr: *const anyopaque, alloc: std.mem.Allocator) void,
@@ -25,7 +25,7 @@ pub fn init(ptr: anytype) Material {
             self_ptr: *const anyopaque,
             r_in: *const Ray,
             hit_record: *const Hittable.Record,
-            attenuation: *Vec3,
+            attenuation: *vec3.vec3,
             scattered: *Ray,
         ) bool {
             const self: T = @ptrCast(@alignCast(@constCast(self_ptr)));
@@ -49,7 +49,7 @@ pub inline fn scatter(
     self: Material,
     r_in: *const Ray,
     hit_record: *const Hittable.Record,
-    attenuation: *Vec3,
+    attenuation: *vec3.vec3,
     scattered: *Ray,
 ) bool {
     return self.scatterFn(self.ptr, r_in, hit_record, attenuation, scattered);
@@ -60,9 +60,9 @@ pub inline fn deinit(self: Material, alloc: std.mem.Allocator) void {
 }
 
 pub const Lambertian = struct {
-    albedo: Vec3,
+    albedo: vec3.vec3,
 
-    pub fn init(alloc: std.mem.Allocator, albedo: Vec3) !Material {
+    pub fn init(alloc: std.mem.Allocator, albedo: vec3.vec3) !Material {
         const result = try alloc.create(Lambertian);
         result.* = .{ .albedo = albedo };
         return Material.init(result);
@@ -76,13 +76,13 @@ pub const Lambertian = struct {
         self: *const Lambertian,
         r_in: *const Ray,
         hit_record: *const Hittable.Record,
-        attenuation: *Vec3,
+        attenuation: *vec3.vec3,
         scattered: *Ray,
     ) bool {
         _ = r_in;
 
-        var scatter_direction = hit_record.normal.add(Vec3.randomUnitVector());
-        if (scatter_direction.nearZero()) scatter_direction = hit_record.normal;
+        var scatter_direction = hit_record.normal + vec3.randomUnit();
+        if (vec3.nearZero(scatter_direction)) scatter_direction = hit_record.normal;
 
         scattered.* = Ray.init(hit_record.p, scatter_direction);
         attenuation.* = self.albedo;
@@ -91,10 +91,10 @@ pub const Lambertian = struct {
 };
 
 pub const Metal = struct {
-    albedo: Vec3,
+    albedo: vec3.vec3,
     fuzz: f64,
 
-    pub fn init(alloc: std.mem.Allocator, albedo: Vec3, fuzz: f64) !Material {
+    pub fn init(alloc: std.mem.Allocator, albedo: vec3.vec3, fuzz: f64) !Material {
         const result = try alloc.create(Metal);
         result.* = .{ .albedo = albedo, .fuzz = fuzz };
         return Material.init(result);
@@ -108,18 +108,16 @@ pub const Metal = struct {
         self: *const Metal,
         r_in: *const Ray,
         hit_record: *const Hittable.Record,
-        attenuation: *Vec3,
+        attenuation: *vec3.vec3,
         scattered: *Ray,
     ) bool {
-        const reflected = r_in.direction
-            .reflect(&hit_record.normal)
-            .normalize()
-            .add(Vec3.randomUnitVector().mulScalar(self.fuzz));
+        const reflected = vec3.normalize(vec3.reflect(r_in.direction, hit_record.normal)) +
+            (vec3.randomUnit() * vec3.scalar(self.fuzz));
 
         scattered.* = Ray.init(hit_record.p, reflected);
         attenuation.* = self.albedo;
 
-        return scattered.direction.dot(&hit_record.normal) > 0;
+        return vec3.dot(scattered.direction, hit_record.normal) > 0;
     }
 };
 
@@ -140,21 +138,21 @@ pub const Dielectric = struct {
         self: *const Dielectric,
         r_in: *const Ray,
         hit_record: *const Hittable.Record,
-        attenuation: *Vec3,
+        attenuation: *vec3.vec3,
         scattered: *Ray,
     ) bool {
-        attenuation.* = Vec3.init(1, 1, 1);
+        attenuation.* = vec3.init(1, 1, 1);
         const ri = if (hit_record.front_face) (1.0 / self.refraction_index) else self.refraction_index;
 
-        const unit_direction = r_in.direction.normalize();
-        const cos_theta = @min(unit_direction.mulScalar(-1.0).dot(&hit_record.normal), 1.0);
+        const unit_direction = vec3.normalize(r_in.direction);
+        const cos_theta = @min(vec3.dot(unit_direction * vec3.scalar(-1.0), hit_record.normal), 1.0);
         const sin_theta = @sqrt(1.0 - cos_theta * cos_theta);
 
         const cannot_refract = ri * sin_theta > 1.0;
         const direction = if (cannot_refract or reflectance(cos_theta, ri) > util.randomDouble())
-            unit_direction.reflect(&hit_record.normal)
+            vec3.reflect(unit_direction, hit_record.normal)
         else
-            unit_direction.refract(&hit_record.normal, ri);
+            vec3.refract(unit_direction, hit_record.normal, ri);
 
         scattered.* = Ray.init(hit_record.p, direction);
 
